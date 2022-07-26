@@ -16,6 +16,7 @@ router.register(r'transformer-viewset', viewset=views.TransformerViewSet)
 urlpatterns = [
     path('transformers/', views.TransformerList.as_view(), name='transformer-list'),
     path('transformers/<int:pk>/', views.TransformerDetail.as_view(), name='transformer-detail'),
+    path('book/bulk/', views.BookBulkCreateUpdate.as_view(), name='book-bulk'),
     path('', include(router.urls)),
 ]
 

@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework import status
 
 from .models import Transformer, Book
-from .serializers import TransformerSerializer, BookSerializer
+from .serializers import TransformerSerializer, BookSerializer, SimpleBookSerializer
 
 from rest_framework import mixins
 from rest_framework import generics
@@ -196,6 +196,59 @@ class BookViewSet(ModelViewSet):
 class TransformerViewSet(ModelViewSet):
     serializer_class = TransformerSerializer
     queryset = Transformer.objects.all()
-    permission_classes = [IsAuthenticated, ]
+    # permission_classes = [IsAuthenticated, ]
+
+
+class BookBulkCreateUpdate(generics.GenericAPIView):
+    serializer_class = SimpleBookSerializer
+    queryset = Book.objects.all()
+
+    def get(self, request):
+        serializer = self.get_serializer(self.get_queryset(), many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    def post(self, request):
+        serializer = self.get_serializer(data=request.data, many=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request):
+        serializer = self.get_serializer(self.get_queryset(), data=request.data, many=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+        # return self.bulk_update(request)
+
+    def bulk_update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        # restrict the update to the filtered queryset
+        serializer = self.get_serializer(
+            self.filter_queryset(self.get_queryset()),
+            data=request.data,
+            many=True,
+            partial=partial,
+        )
+        validated_data = []
+        errors = []
+        serializers_list = []
+        for item in request.data:
+            item_serializer = self.get_serializer(
+                Book.objects.get(id=item['id']),
+                data=item,
+                partial=partial,
+            )
+            if not item_serializer.is_valid(raise_exception=False):
+                errors.append({item['id']: item_serializer.errors})
+            else:
+                validated_data.append(item_serializer.validated_data)
+                serializers_list.append(item_serializer)
+        if errors:
+            return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer._validated_data = validated_data
+        for _serializer in serializers_list:
+            _serializer.save()
+        return Response(validated_data, status=status.HTTP_200_OK)
 
 
