@@ -1,13 +1,16 @@
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from guardian.shortcuts import assign_perm
+from rest_framework.exceptions import ValidationError
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework_bulk import ListBulkCreateUpdateDestroyAPIView
 
 from .models import Transformer, Book
-from .serializers import TransformerSerializer, BookSerializer, SimpleBookSerializer
+from .serializers import TransformerSerializer, BookSerializer, FooSerializer, SimpleBookSerializer, \
+    BulkCreateBookSerializer, BulkUpdateBookSerializer
 
 from rest_framework import mixins
 from rest_framework import generics
@@ -190,7 +193,7 @@ class TransformerDetail(generics.RetrieveUpdateDestroyAPIView):
 class BookViewSet(ModelViewSet):
     serializer_class = BookSerializer
     queryset = Book.objects.all()
-    permission_classes = [IsAuthenticated, ]
+    # permission_classes = [IsAuthenticated, ]
 
 
 class TransformerViewSet(ModelViewSet):
@@ -199,56 +202,68 @@ class TransformerViewSet(ModelViewSet):
     # permission_classes = [IsAuthenticated, ]
 
 
+def validate_ids(data, field="id", unique=True):
+    if isinstance(data, list):
+        id_list = [int(x[field]) for x in data]
+        if unique and len(id_list) != len(set(id_list)):
+            raise ValidationError("Multiple updates to a single {} found".format(field))
+        return id_list
+    return [data]
+
+
 class BookBulkCreateUpdate(generics.GenericAPIView):
     serializer_class = SimpleBookSerializer
-    queryset = Book.objects.all()
 
     def get(self, request):
         serializer = self.get_serializer(self.get_queryset(), many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):
-        serializer = self.get_serializer(data=request.data, many=True)
+        data = {}
+        for i in request.data:
+            data[i['name']] = data.get(i['name'], 0) + 1
+
+        context = {
+            'data': data
+        }
+        serializer = self.get_serializer(data=request.data, many=True, context=context)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    def put(self, request):
-        serializer = self.get_serializer(self.get_queryset(), data=request.data, many=True)
-        serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_200_OK)
-        # return self.bulk_update(request)
+    def patch(self, request):
+        data = {}
+        for i in request.data:
+            data[i['name']] = data.get(i['name'], 0) + 1
 
-    def bulk_update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', False)
-        # restrict the update to the filtered queryset
-        serializer = self.get_serializer(
-            self.filter_queryset(self.get_queryset()),
-            data=request.data,
-            many=True,
-            partial=partial,
-        )
-        validated_data = []
-        errors = []
-        serializers_list = []
-        for item in request.data:
-            item_serializer = self.get_serializer(
-                Book.objects.get(id=item['id']),
-                data=item,
-                partial=partial,
-            )
-            if not item_serializer.is_valid(raise_exception=False):
-                errors.append({item['id']: item_serializer.errors})
-            else:
-                validated_data.append(item_serializer.validated_data)
-                serializers_list.append(item_serializer)
-        if errors:
-            return Response(errors, status=status.HTTP_400_BAD_REQUEST)
-        serializer._validated_data = validated_data
-        for _serializer in serializers_list:
-            _serializer.save()
-        return Response(validated_data, status=status.HTTP_200_OK)
+        ids = validate_ids(request.data)
+        instances = self.get_queryset(ids=ids)
+
+        context = {
+            'data': data,
+            'book_ids': list(instances.values_list('id', flat=True))
+        }
+
+        serializer = self.get_serializer(instances, data=request.data, many=True, context=context)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def get_serializer(self, *args, **kwargs):
+        if self.request.method == 'POST':
+            return BulkCreateBookSerializer(*args, **kwargs)
+        if self.request.method == 'PATCH':
+            return BulkUpdateBookSerializer(*args, **kwargs)
+        return SimpleBookSerializer(*args, **kwargs)
+
+    def get_queryset(self, ids=None, *args, **kwargs):
+        if ids:
+            return Book.objects.filter(id__in=ids)
+        return Book.objects.all()
 
 
+class FooView(ListBulkCreateUpdateDestroyAPIView):
+    queryset = Book.objects.all()
+    serializer_class = FooSerializer

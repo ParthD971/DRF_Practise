@@ -50,17 +50,23 @@ INSTALLED_APPS = [
     'guardian',
 
     # for show_url cmd of manage.py
-    'django_extensions'
+    'django_extensions',
+    
+    'drf_yasg',
 ]
-
+# from django.middleware.security import SecurityMiddleware
 MIDDLEWARE = [
+    # 'tutorial.middlewares.custom_middleware.MyMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    # 'tutorial.middlewares.custom_middleware.MyMiddleware2',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # 'tutorial.middlewares.custom_middleware.simple_middleware',
+
 ]
 
 ROOT_URLCONF = 'tutorial.urls'

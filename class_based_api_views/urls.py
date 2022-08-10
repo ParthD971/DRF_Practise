@@ -17,6 +17,7 @@ urlpatterns = [
     path('transformers/', views.TransformerList.as_view(), name='transformer-list'),
     path('transformers/<int:pk>/', views.TransformerDetail.as_view(), name='transformer-detail'),
     path('book/bulk/', views.BookBulkCreateUpdate.as_view(), name='book-bulk'),
+    # path('book/bulk/', views.FooView.as_view(), name='book-bulk'),
     path('', include(router.urls)),
 ]
 
